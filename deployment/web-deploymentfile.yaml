@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: go-web
-          image: sigit26/go-web:latest
+          image: sigit26/go-web:version
           ports:
             - containerPort: 8080
           imagePullPolicy: Always
