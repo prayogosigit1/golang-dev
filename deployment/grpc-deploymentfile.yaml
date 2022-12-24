@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: grpc
-          image: sigit26/grpc:latest
+          image: sigit26/grpc:version
           ports:
             - containerPort: 8080
           imagePullPolicy: Always
