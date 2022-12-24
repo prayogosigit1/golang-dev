@@ -1,0 +1,85 @@
+def FILE = "deployment/web-deploymentfile.yaml"
+def DEPLOYMENT_FILE = "web-deploymentfile.yaml"
+
+def APP_NAME = 'go-webapp'
+def FACTORY = 'go-webapp-sample'
+def IMAGE_PREFIX = 'sigit26/' + APP_NAME
+
+pipeline{
+    agent {
+        label 'master'
+    }
+    parameters {
+        booleanParam(name: 'build', defaultValue: false, description: '')
+        booleanParam(name: 'release', defaultValue: false, description: '')
+        booleanParam(name: 'rollback', defaultValue: false, description: '')
+        gitParameter (
+            name: 'TAG', 
+             type: 'PT_TAG',
+             defaultValue: 'main',
+             sortMode: 'DESCENDING',
+             tagFilter: '*.*.*'
+        )
+    }
+    stages {
+        stage('Pull') {
+            steps {
+                checkout([$class: 'GitSCM', 
+                          branches: [[name: "${params.TAG}"]], 
+                          doGenerateSubmoduleConfigurations: false, 
+                          extensions: [], 
+                          gitTool: 'Default', 
+                          submoduleCfg: [], 
+                          userRemoteConfigs: [[url: 'https://github.com/prayogosigit1/golang-dev.git', credentialsId: 'github']]
+                        ])
+            }
+        }
+        stage('Building') {
+            when {
+                expression { params.build == true }
+            }
+            stages {
+                stage('Build') {
+                    steps {
+                        script {
+                            sh 'cp ' + FILE + ' ' + FACTORY
+                        }
+                    }
+                }
+            }
+        }   
+                stage('Build docker') {
+                    steps{
+                            script {                                   
+                                dir('go-webapp-sample') {
+                                    def VERSION_APP = sh (
+                                        script: 'git describe --tags',
+                                        returnStdout: true
+                                    ).trim()
+                                    def imageId = IMAGE_PREFIX + ':' + VERSION_APP 
+                                    sh 'sed s/version/' + VERSION_APP + '/g ' + DEPLOYMENT_FILE + ' > ' + DEPLOYMENT_FILE + '.tmp'
+                                    sh 'rm -rf '  + DEPLOYMENT_FILE + ' && mv '  + DEPLOYMENT_FILE + '.tmp ' + DEPLOYMENT_FILE 
+                                    sh 'docker images | grep "' + IMAGE_PREFIX + '" | awk \'{print $1 ":" $2}\' | xargs docker rmi || true'
+                                    sh 'docker build -t ' + imageId + ' .'
+                                    sh 'docker push ' + imageId
+                            // send totif
+                                }
+                            }
+                    }
+                }
+        stage('Release') {
+            when {
+                expression { params.release == true }
+            }
+            stages {
+                stage('Deploy to k8s') {
+                    steps {
+                        dir('go-webapp-sample') {    
+                            sh 'kubectl apply -f ' + DEPLOYMENT_FILE
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
